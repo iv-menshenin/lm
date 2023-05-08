@@ -1,8 +1,7 @@
-package udp
+package transport
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"net"
 )
@@ -13,11 +12,15 @@ type (
 		addr []net.IP
 		conn net.PacketConn
 	}
+	Received struct {
+		Addr net.Addr
+		Data []byte
+	}
 )
 
 const DefaultPort = 7999
 
-func New(port uint16) (*Listener, error) {
+func NewUDP(port uint16) (*Listener, error) {
 	if port == 0 {
 		port = DefaultPort
 	}
@@ -35,13 +38,7 @@ func New(port uint16) (*Listener, error) {
 	return &l, nil
 }
 
-type Received struct {
-	Addr net.Addr
-	Data []byte
-}
-
-func (l *Listener) Listen() (*Received, error) {
-	var buf = make([]byte, 1024)
+func (l *Listener) Listen(buf []byte) (*Received, error) {
 	n, addr, err := l.conn.ReadFrom(buf)
 	if err != nil {
 		return nil, err
@@ -53,7 +50,7 @@ func (l *Listener) Listen() (*Received, error) {
 	return &received, nil
 }
 
-func (l *Listener) Send(data []byte) error {
+func (l *Listener) SendAll(data []byte) error {
 	for _, addr := range l.addr {
 		udp := net.UDPAddr{
 			IP:   addr,
@@ -62,6 +59,21 @@ func (l *Listener) Send(data []byte) error {
 		if _, err := l.conn.WriteTo(data, &udp); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (l *Listener) Send(data []byte, addr net.Addr) error {
+	udpAddr, ok := addr.(*net.UDPAddr)
+	if !ok {
+		var err error
+		udpAddr, err = net.ResolveUDPAddr(addr.Network(), addr.String())
+		if err != nil {
+			return err
+		}
+	}
+	if _, err := l.conn.WriteTo(data, udpAddr); err != nil {
+		return err
 	}
 	return nil
 }
@@ -98,13 +110,4 @@ func (l *Listener) discoverSubnets() error {
 		}
 	}
 	return nil
-}
-
-func lastAddr(n *net.IPNet) (net.IP, error) { // works when the n is a prefix, otherwise...
-	if n.IP.To4() == nil {
-		return net.IP{}, errors.New("does not support IPv6 addresses.")
-	}
-	ip := make(net.IP, len(n.IP.To4()))
-	binary.BigEndian.PutUint32(ip, binary.BigEndian.Uint32(n.IP.To4())|^binary.BigEndian.Uint32(net.IP(n.Mask).To4()))
-	return ip, nil
 }
