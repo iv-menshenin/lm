@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/iv-menshenin/lm/src/udp"
+	"github.com/iv-menshenin/lm/udp"
 )
 
 func main() {

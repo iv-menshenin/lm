@@ -1,16 +1,17 @@
 package limitmng
 
 import (
-	"github.com/iv-menshenin/lm/src/limitmng/fixedwindow"
-	"github.com/iv-menshenin/lm/src/limitmng/leakybucket"
-	"github.com/iv-menshenin/lm/src/limitmng/slidingwindow"
-	"github.com/iv-menshenin/lm/src/limitmng/tokenbucket"
-	"github.com/iv-menshenin/lm/src/types"
 	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/iv-menshenin/lm/limitmng/fixedwindow"
+	"github.com/iv-menshenin/lm/limitmng/leakybucket"
+	"github.com/iv-menshenin/lm/limitmng/slidingwindow"
+	"github.com/iv-menshenin/lm/limitmng/tokenbucket"
+	"github.com/iv-menshenin/lm/types"
 )
 
 func Test_LimitPrimitives(t *testing.T) {

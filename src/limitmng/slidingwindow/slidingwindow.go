@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/iv-menshenin/lm/src/types"
+	"github.com/iv-menshenin/lm/types"
 )
 
 type SlidingWindow struct {
