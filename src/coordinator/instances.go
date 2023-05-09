@@ -105,6 +105,17 @@ func (i *Instances) searchInt(key string) string {
 	return ""
 }
 
+func (i *Instances) toOwn(key string) bool {
+	var owned bool
+	i.mux.Lock()
+	if i.searchInt(key) == "" {
+		i.mineKeys[key] = struct{}{}
+		owned = true
+	}
+	i.mux.Unlock()
+	return owned
+}
+
 func (i *Instances) save(ID []byte, key string, addr net.Addr) error {
 	i.mux.Lock()
 	if i.searchInt(key) != "" {

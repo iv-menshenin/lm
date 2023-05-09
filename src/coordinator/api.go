@@ -17,9 +17,12 @@ func (m *Manager) CheckKey(key string) (string, error) {
 	if instance := m.ins.search(key); instance != "" {
 		return instance, nil
 	}
+	if !m.ins.toOwn(key) {
+		return "", errors.New("can't own, race")
+	}
 	var trys = 5
 	for {
-		errCh := m.awaitMostOf(cmdSaved, []byte(key))
+		errCh := m.awaitResponses(cmdSaved, []byte(key))
 		if err := m.advertiseThatIsMine(key); err != nil {
 			return "", err
 		}
