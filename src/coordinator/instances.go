@@ -123,6 +123,16 @@ func (i *Instances) save(ID []byte, key string, addr net.Addr) error {
 	return nil
 }
 
+func (i *Instances) reset(key string) {
+	i.mux.Lock()
+	// TODO need a hook here
+	delete(i.mineKeys, key)
+	for _, v := range i.instances {
+		delete(v.keys, key)
+	}
+	i.mux.Unlock()
+}
+
 func (i *Instances) cleanup() int {
 	var toDel = make([]string, 0)
 	i.mux.Lock()

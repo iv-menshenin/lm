@@ -203,5 +203,10 @@ func (m *Manager) process(msg Msg) error {
 			err = m.sendSaved(msg.addr, msg.data)
 		}
 	}
+	// someone wants to revoke possession of a key because of a conflict
+	if bytes.Equal(msg.cmd, cmdBroadReset) {
+		m.ins.reset(string(msg.data))
+	}
+
 	return err
 }
