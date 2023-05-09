@@ -94,15 +94,16 @@ func (m *Manager) stateLoop() {
 				if cycles > 3 {
 					var (
 						err  error
-						cnt  = 5
+						cnt  = 3
 						hash = m.ins.hashAllID(m.ID)
 					)
 					for {
+						errCh := m.awaitMostOf(cmdCompared, hash)
 						if err = m.sendCompareInstances(hash); err != nil {
 							m.setErr(err)
 							return
 						}
-						err = m.awaitMostOf(cmdCompared, hash)
+						err = <-errCh
 						if cnt--; err == nil || cnt < 0 {
 							break
 						}
@@ -194,6 +195,7 @@ func (m *Manager) process(msg Msg) error {
 			err = m.sendCompared(msg.addr, msg.data)
 		}
 	}
+	// someone bragged about a captured key
 	if bytes.Equal(msg.cmd, cmdBroadMine) {
 		if err = m.ins.save(msg.sender, string(msg.data), msg.addr); err != nil {
 			err = m.sendReset(msg.data)

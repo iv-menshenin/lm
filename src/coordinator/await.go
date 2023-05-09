@@ -10,11 +10,12 @@ import (
 
 var defaultAwaitTimeout = 50 * time.Millisecond
 
-func (m *Manager) awaitResponses(cmd, data []byte) error {
+func (m *Manager) awaitResponses(cmd, data []byte) <-chan error {
 	var wg sync.WaitGroup
 	var cancel = make(chan struct{})
 	var done = make(chan struct{})
 	var timeout = make(chan struct{})
+	var result = make(chan error, 1)
 
 	go func() {
 		select {
@@ -40,21 +41,25 @@ func (m *Manager) awaitResponses(cmd, data []byte) error {
 		wg.Wait()
 		close(done)
 	}()
-	select {
-	case <-done:
-		return nil
-	case <-timeout:
-		return errors.New("timeout")
-	}
+	go func() {
+		select {
+		case <-timeout:
+			result <- errors.New("timeout")
+		case <-done:
+		}
+		close(result)
+	}()
+	return result
 }
 
-func (m *Manager) awaitMostOf(cmd, data []byte) error {
-	var kvorum = int64(m.ins.getCount() / 2)
+func (m *Manager) awaitMostOf(cmd, data []byte) <-chan error {
+	var kvorum = int64(m.ins.getCount()/2) + 1
 	var wg sync.WaitGroup
 	var cancel = make(chan struct{})
 	var done = make(chan struct{})
 	var kvo = make(chan struct{})
 	var timeout = make(chan struct{})
+	var result = make(chan error, 1)
 
 	go func() {
 		select {
@@ -71,7 +76,7 @@ func (m *Manager) awaitMostOf(cmd, data []byte) error {
 		go func(id int64) {
 			select {
 			case <-ch:
-				if cnt := atomic.AddInt64(&kvorum, -1); cnt == -1 {
+				if cnt := atomic.AddInt64(&kvorum, -1); cnt == 0 {
 					close(kvo)
 				}
 			case <-cancel:
@@ -84,14 +89,16 @@ func (m *Manager) awaitMostOf(cmd, data []byte) error {
 		wg.Wait()
 		close(done)
 	}()
-	select {
-	case <-done:
-		return nil
-	case <-kvo:
-		return nil
-	case <-timeout:
-		return errors.New("timeout")
-	}
+	go func() {
+		select {
+		case <-timeout:
+			result <- errors.New("timeout")
+		case <-done:
+		case <-kvo:
+		}
+		close(result)
+	}()
+	return result
 }
 
 type (

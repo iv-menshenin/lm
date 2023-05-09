@@ -17,10 +17,11 @@ func (m *Manager) CheckKey(key string) (string, error) {
 	if instance := m.ins.search(key); instance != "" {
 		return instance, nil
 	}
+	errCh := m.awaitResponses(cmdSaved, []byte(key))
 	if err := m.advertiseThatIsMine(key); err != nil {
 		return "", err
 	}
-	if err := m.awaitResponses(cmdSaved, []byte(key)); err != nil {
+	if err := <-errCh; err != nil {
 		return "", err
 	}
 	return Mine, nil
