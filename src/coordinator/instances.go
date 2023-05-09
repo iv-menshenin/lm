@@ -99,7 +99,6 @@ func (i *Instances) searchInt(key string) string {
 	}
 	for k, v := range i.instances {
 		if _, ok := v.keys[key]; ok {
-			i.mux.RUnlock()
 			return k
 		}
 	}
