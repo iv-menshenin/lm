@@ -17,12 +17,18 @@ func (m *Manager) CheckKey(key string) (string, error) {
 	if instance := m.ins.search(key); instance != "" {
 		return instance, nil
 	}
-	errCh := m.awaitResponses(cmdSaved, []byte(key))
-	if err := m.advertiseThatIsMine(key); err != nil {
-		return "", err
+	var trys = 5
+	for {
+		errCh := m.awaitMostOf(cmdSaved, []byte(key))
+		if err := m.advertiseThatIsMine(key); err != nil {
+			return "", err
+		}
+		if err := <-errCh; err != nil {
+			if trys--; trys > 0 {
+				continue
+			}
+			return "", err
+		}
+		return Mine, nil
 	}
-	if err := <-errCh; err != nil {
-		return "", err
-	}
-	return Mine, nil
 }

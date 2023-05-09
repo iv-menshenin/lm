@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"sync"
@@ -65,6 +66,10 @@ func New(transport Transport) *Manager {
 		ins:   newInstances(),
 		awr:   newAwaiter(),
 	}
+}
+
+func (m *Manager) Key() string {
+	return fmt.Sprintf("%x", m.ID[:])
 }
 
 func (m *Manager) Manage() error {
