@@ -116,6 +116,12 @@ func (i *Instances) toOwn(key string) bool {
 	return owned
 }
 
+func (i *Instances) fromOwn(key string) {
+	i.mux.Lock()
+	delete(i.mineKeys, key)
+	i.mux.Unlock()
+}
+
 func (i *Instances) save(ID []byte, key string, addr net.Addr) error {
 	i.mux.Lock()
 	if i.searchInt(key) != "" {

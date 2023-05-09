@@ -203,7 +203,7 @@ func (m *Manager) process(msg Msg) error {
 	// someone bragged about a captured key
 	if bytes.Equal(msg.cmd, cmdBroadMine) {
 		if err = m.ins.save(msg.sender, string(msg.data), msg.addr); err != nil {
-			err = m.sendReset(msg.data)
+			// err = m.sendReset(msg.data) not yours
 		} else {
 			err = m.sendSaved(msg.addr, msg.data)
 		}
