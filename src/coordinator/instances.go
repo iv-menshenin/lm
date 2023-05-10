@@ -2,9 +2,7 @@ package coordinator
 
 import (
 	"bytes"
-	"encoding/hex"
 	"errors"
-	"log"
 	"net"
 	"sync"
 	"time"
@@ -65,7 +63,7 @@ func (i *Instances) getCount() int {
 	return cnt
 }
 
-func (i *Instances) add(ID []byte, addr net.Addr) {
+func (i *Instances) add(ID []byte, addr net.Addr) bool {
 	var isNew bool
 	i.mux.Lock()
 	instance, ok := i.instances[addr.String()]
@@ -79,11 +77,8 @@ func (i *Instances) add(ID []byte, addr net.Addr) {
 	}
 	instance.tm = time.Now()
 	i.instances[addr.String()] = instance
-	ln := len(i.instances)
 	i.mux.Unlock()
-	if isNew {
-		log.Printf("REGISTERED (%d): %s %s", ln, addr.String(), hex.EncodeToString(ID))
-	}
+	return isNew
 }
 
 func (i *Instances) search(key string) string {

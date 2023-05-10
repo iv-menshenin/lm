@@ -21,6 +21,7 @@ func main() {
 	}
 	defer udp.Close()
 	c := coordinator.New(udp)
+	c.SetLogLevel(coordinator.LogLevelDebug)
 	var (
 		keyStore = make(map[string]int64)
 		keyMux   sync.Mutex
@@ -40,6 +41,7 @@ func main() {
 				return
 			}
 			if serv == coordinator.Mine {
+				writer.Header().Set("Keep-Alive", "True")
 				log.Printf("PROCESS: %s\n", c.Key())
 				switch request.URL.Path {
 				case "/keys/increment":
@@ -69,6 +71,7 @@ func main() {
 			}
 			req := request.Clone(context.Background())
 			hostPort := strings.Split(serv, ":")
+			req.Header.Add("Keep-Alive", "True")
 			req.URL.Host = hostPort[0] + ":8080"
 			req.URL.Scheme = "http"
 			log.Printf("REDIRECT: %s\n", req.URL.String())

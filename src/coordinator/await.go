@@ -3,7 +3,6 @@ package coordinator
 import (
 	"bytes"
 	"errors"
-	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -11,52 +10,10 @@ import (
 
 var defaultAwaitTimeout = 50 * time.Millisecond
 
-func (m *Manager) awaitResponses(cmd, data []byte) <-chan error {
-	var wg sync.WaitGroup
-	var cancel = make(chan struct{})
-	var done = make(chan struct{})
-	var timeout = make(chan struct{})
-	var result = make(chan error, 1)
-
-	go func() {
-		select {
-		case <-done:
-		case <-time.After(defaultAwaitTimeout):
-		}
-		close(timeout)
-		close(cancel)
-	}()
-	for _, v := range m.ins.getAllID() {
-		wg.Add(1)
-		var ch = make(chan struct{})
-		go func(id int64) {
-			select {
-			case <-ch:
-			case <-cancel:
-			}
-			m.awr.del(id)
-			wg.Done()
-		}(m.awr.add(append(append(append(make([]byte, 0, 20+len(data)), cmd...), v[:]...), data...), ch))
-	}
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-	go func() {
-		select {
-		case <-timeout:
-			result <- errors.New("timeout")
-		case <-done:
-		}
-		close(result)
-	}()
-	return result
-}
-
 func (m *Manager) awaitMostOf(cmd, data []byte) <-chan error {
-	log.Printf("AWAITING %x: %s %x", m.ID, string(cmd), data)
+	m.debug("AWAITING %x: %s %x", m.id, string(cmd), data)
 
-	var kvorum = int64(m.ins.getCount()+1) / 2
+	var quorum = int64(m.ins.getCount()+1) / 2
 	var wg sync.WaitGroup
 	var cancel = make(chan struct{})
 	var done = make(chan struct{})
@@ -79,7 +36,7 @@ func (m *Manager) awaitMostOf(cmd, data []byte) <-chan error {
 		go func(id int64) {
 			select {
 			case <-ch:
-				if cnt := atomic.AddInt64(&kvorum, -1); cnt == 0 {
+				if cnt := atomic.AddInt64(&quorum, -1); cnt == 0 {
 					close(kvo)
 				}
 			case <-cancel:

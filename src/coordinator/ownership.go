@@ -7,28 +7,28 @@ import (
 )
 
 func (m *Manager) tryToOwn(key string) (bool, error) {
-	if !m.own.add(m.ID, key) {
+	if !m.own.add(m.id, key) {
 		return false, nil
 	}
-	chErr := m.awaitMostOf(cmdCandidate, append(append(make([]byte, 0, 16+len(key)), m.ID[:]...), []byte(key)...))
+	chErr := m.awaitMostOf(cmdCandidate, append(append(make([]byte, 0, 16+len(key)), m.id[:]...), []byte(key)...))
 	if err := m.sendWantKey(key); err != nil {
 		return false, err
 	}
 	if err := <-chErr; err != nil {
-		log.Printf("OWNERSHIP DENIED %x: %+v", m.ID, err)
+		log.Printf("OWNERSHIP DENIED %x: %+v", m.id, err)
 		return false, nil
 	}
 	if !m.ins.toOwn(key) {
-		log.Printf("OWNERSHIP BREAKED %x", m.ID)
+		log.Printf("OWNERSHIP BREAKED %x", m.id)
 		return false, nil
 	}
-	chErr = m.awaitMostOf(cmdSaved, append(append(make([]byte, 0, 16+len(key)), m.ID[:]...), []byte(key)...))
+	chErr = m.awaitMostOf(cmdSaved, append(append(make([]byte, 0, 16+len(key)), m.id[:]...), []byte(key)...))
 	if err := m.sendThatIsMine(key); err != nil {
 		return false, err
 	}
 	if err := <-chErr; err != nil {
 		m.ins.fromOwn(key)
-		log.Printf("OWNERSHIP CANCELLED %x: %+v", m.ID, err)
+		log.Printf("OWNERSHIP CANCELLED %x: %+v", m.id, err)
 		return false, nil
 	}
 	return true, nil

@@ -14,23 +14,34 @@ import (
 	"github.com/iv-menshenin/lm/transport"
 )
 
-type Manager struct {
-	ID   [16]byte
-	port uint16
+type (
+	Manager struct {
+		loglevel LogLevel
 
-	ls Transport
+		id   [16]byte
+		port uint16
 
-	state int64
-	armed int64
+		ls Transport
 
-	err  error
-	once sync.Once
-	done chan struct{}
+		state int64
+		armed int64
 
-	ins *Instances
-	awr *Awaiter
-	own *Ownership
-}
+		err  error
+		once sync.Once
+		done chan struct{}
+
+		ins *Instances
+		awr *Awaiter
+		own *Ownership
+	}
+	LogLevel uint8
+)
+
+const (
+	LogLevelError LogLevel = iota
+	LogLevelWarning
+	LogLevelDebug
+)
 
 type Transport interface {
 	SendAll([]byte) error
@@ -59,19 +70,40 @@ func New(transport Transport) *Manager {
 		panic(err)
 	}
 	return &Manager{
-		ID:    idX,
-		ls:    transport,
-		state: StateCreated,
-		armed: UnArmed,
-		done:  make(chan struct{}),
-		ins:   newInstances(),
-		awr:   newAwaiter(),
-		own:   newOwnership(),
+		loglevel: LogLevelError,
+		id:       idX,
+		ls:       transport,
+		state:    StateCreated,
+		armed:    UnArmed,
+		done:     make(chan struct{}),
+		ins:      newInstances(),
+		awr:      newAwaiter(),
+		own:      newOwnership(),
 	}
 }
 
+func (m *Manager) SetLogLevel(l LogLevel) {
+	m.loglevel = l
+}
+
+func (m *Manager) debug(format string, args ...any) {
+	if m.loglevel >= LogLevelDebug {
+		log.Printf(format, args...)
+	}
+}
+
+func (m *Manager) warning(format string, args ...any) {
+	if m.loglevel >= LogLevelWarning {
+		log.Printf(format, args...)
+	}
+}
+
+func (m *Manager) error(format string, args ...any) {
+	log.Printf(format, args...)
+}
+
 func (m *Manager) Key() string {
-	return fmt.Sprintf("%x", m.ID[:])
+	return fmt.Sprintf("%x", m.id[:])
 }
 
 func (m *Manager) Manage() error {
@@ -86,7 +118,6 @@ func (m *Manager) Manage() error {
 
 func (m *Manager) stateLoop() {
 	var lastTimeDiscovered time.Time
-	var cycles int64
 	for {
 		time.Sleep(10 * time.Millisecond)
 		switch atomic.LoadInt64(&m.state) {
@@ -95,37 +126,12 @@ func (m *Manager) stateLoop() {
 
 		case StateReady:
 			if del := m.ins.cleanup(); del > 0 {
-				log.Printf("UNLINKED: %d\n", del)
+				m.warning("UNLINKED: %d", del)
 			}
 			if time.Since(lastTimeDiscovered).Seconds() >= 1 {
-				if cycles > 3 {
-					var (
-						err  error
-						cnt  = 3
-						hash = m.ins.hashAllID(m.ID)
-					)
-					for {
-						errCh := m.awaitMostOf(cmdCompared, hash)
-						if err = m.sendCompareInstances(hash); err != nil {
-							m.setErr(err)
-							return
-						}
-						err = <-errCh
-						if cnt--; err == nil || cnt < 0 {
-							break
-						}
-					}
-					if err != nil {
-						if atomic.CompareAndSwapInt64(&m.armed, Armed, UnArmed) {
-							// TODO
-							log.Printf("UNARMED: %+v\n", err)
-						}
-					} else {
-						if atomic.CompareAndSwapInt64(&m.armed, UnArmed, Armed) {
-							// TODO
-							log.Printf("ARMED\n")
-						}
-					}
+				if err := m.checkArmedStatus(); err != nil {
+					m.setErr(err)
+					return
 				}
 				atomic.CompareAndSwapInt64(&m.state, StateReady, StateDiscovery)
 			}
@@ -138,7 +144,6 @@ func (m *Manager) stateLoop() {
 			}
 			atomic.CompareAndSwapInt64(&m.state, StateDiscovery, StateReady)
 			lastTimeDiscovered = time.Now()
-			cycles++
 			continue
 
 		case StateDeactivated:
@@ -152,7 +157,36 @@ func (m *Manager) stateLoop() {
 	}
 }
 
+func (m *Manager) checkArmedStatus() (err error) {
+	m.debug("CHECK STATUS")
+	var (
+		cnt  = 3
+		hash = m.ins.hashAllID(m.id)
+	)
+	for {
+		errCh := m.awaitMostOf(cmdCompared, hash)
+		if err = m.sendCompareInstances(hash); err != nil {
+			return err
+		}
+		err = <-errCh
+		if cnt--; err == nil || cnt < 0 {
+			break
+		}
+	}
+	if err != nil {
+		if atomic.CompareAndSwapInt64(&m.armed, Armed, UnArmed) {
+			m.warning("UNARMED: %+v", err)
+		}
+		return nil
+	}
+	if atomic.CompareAndSwapInt64(&m.armed, UnArmed, Armed) {
+		m.warning("ARMED")
+	}
+	return nil
+}
+
 func (m *Manager) setErr(err error) {
+	m.error("ERROR: %+v", err)
 	m.once.Do(func() {
 		m.err = err
 		atomic.StoreInt64(&m.state, StateBroken)
@@ -169,8 +203,7 @@ func (m *Manager) readLoop() {
 		}
 		parsed, err := parse(received)
 		if err != nil {
-			// TODO
-			log.Printf("ERROR: %+v", err)
+			m.error("ERROR: %+v", err)
 			continue
 		}
 		if err = m.process(parsed); err != nil {
@@ -182,23 +215,27 @@ func (m *Manager) readLoop() {
 }
 
 func (m *Manager) process(msg Msg) error {
-	if bytes.Equal(msg.sender, m.ID[:]) {
+	if bytes.Equal(msg.sender, m.id[:]) {
 		// skip self owned messages
 		return nil
 	}
 	var err error
 	// tell them all that we are online
 	if bytes.Equal(msg.cmd, cmdBroadKnock) {
-		m.ins.add(msg.sender, msg.addr)
+		if m.ins.add(msg.sender, msg.addr) {
+			m.debug("REGISTERED: %x %s", msg.sender, msg.addr.String())
+		}
 		err = m.sendWelcome(msg.addr)
 	}
 	// register everyone who said hello
 	if bytes.Equal(msg.cmd, cmdWelcome) {
-		m.ins.add(msg.sender, msg.addr)
+		if m.ins.add(msg.sender, msg.addr) {
+			m.debug("REGISTERED: %x %s", msg.sender, msg.addr.String())
+		}
 	}
 	// confirm the on-line instance list
 	if bytes.Equal(msg.cmd, cmdBroadCompare) {
-		if bytes.Equal(m.ins.hashAllID(m.ID), msg.data) {
+		if bytes.Equal(m.ins.hashAllID(m.id), msg.data) {
 			err = m.sendCompared(msg.addr, msg.data)
 		}
 	}
@@ -212,11 +249,22 @@ func (m *Manager) process(msg Msg) error {
 		}
 	}
 	if bytes.Equal(msg.cmd, cmdBroadWantKey) {
-		var id [16]byte
-		copy(id[:], msg.sender)
-		if m.own.add(id, string(msg.data)) {
-			log.Printf("OWNERSHIP CANDIDATE %x: %s", id, string(msg.data))
-			err = m.sendCandidate(msg.addr, msg.sender, msg.data)
+		switch m.ins.search(string(msg.data)) {
+		case Mine:
+			err = m.sendRegistered(msg.addr, msg.data)
+		case "":
+			var id [16]byte
+			copy(id[:], msg.sender)
+			if m.own.add(id, string(msg.data)) {
+				log.Printf("OWNERSHIP CANDIDATE %x: %s", id, string(msg.data))
+				err = m.sendCandidate(msg.addr, msg.sender, msg.data)
+			}
+		}
+	}
+	if bytes.Equal(msg.cmd, cmdRegistered) {
+		if err = m.ins.save(msg.sender, string(msg.data), msg.addr); err != nil {
+			// TODO insecured
+			err = m.sendReset(msg.data) // not yours
 		}
 	}
 	// someone wants to revoke possession of a key because of a conflict

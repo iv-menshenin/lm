@@ -27,10 +27,11 @@ func main() {
 			defer wg.Done()
 			var cnt = 1000
 			for {
-				<-time.After(50 * time.Microsecond)
+				<-time.After(50 * time.Millisecond)
 				resp, err := http.Get("http://192.168.1.204:8080/keys/increment?key=X" + strconv.Itoa(sy))
 				if err != nil {
-					panic(err)
+					atomic.AddInt64(&errors, 1)
+					continue
 				}
 				if resp.StatusCode != 200 {
 					resp.Body.Close()

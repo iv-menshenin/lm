@@ -8,73 +8,81 @@ import (
 )
 
 func (m *Manager) sendKnockKnock() error {
-	var data = make([]byte, 0, 1024)
+	var data = make([]byte, 0, 20)
 	data = append(data, cmdBroadKnock...)
-	data = append(data, m.ID[:]...)
+	data = append(data, m.id[:]...)
 	return m.ls.SendAll(data)
 }
 
 func (m *Manager) sendWelcome(addr net.Addr) error {
-	var data = make([]byte, 0, 1024)
+	var data = make([]byte, 0, 20)
 	data = append(data, cmdWelcome...)
-	data = append(data, m.ID[:]...)
+	data = append(data, m.id[:]...)
 	return m.ls.Send(data, addr)
 }
 
 func (m *Manager) sendWantKey(key string) error {
-	var data = make([]byte, 0, 1024)
+	var data = make([]byte, 0, 20+len(key))
 	data = append(data, cmdBroadWantKey...)
-	data = append(data, m.ID[:]...)
+	data = append(data, m.id[:]...)
 	data = append(data, key...)
 	return m.ls.SendAll(data)
 }
 
 func (m *Manager) sendThatIsMine(key string) error {
-	var data = make([]byte, 0, 1024)
+	var data = make([]byte, 0, 20+len(key))
 	data = append(data, cmdBroadMine...)
-	data = append(data, m.ID[:]...)
+	data = append(data, m.id[:]...)
 	data = append(data, key...)
 	return m.ls.SendAll(data)
 }
 
 func (m *Manager) sendCandidate(addr net.Addr, owner, key []byte) error {
-	var data = make([]byte, 0, 1024)
+	var data = make([]byte, 0, 36+len(key))
 	data = append(data, cmdCandidate...)
-	data = append(data, m.ID[:]...)
+	data = append(data, m.id[:]...)
 	data = append(data, owner...)
 	data = append(data, key...)
 	return m.ls.Send(data, addr)
 }
 
 func (m *Manager) sendSaved(addr net.Addr, owner, key []byte) error {
-	var data = make([]byte, 0, 1024)
+	var data = make([]byte, 0, 36+len(key))
 	data = append(data, cmdSaved...)
-	data = append(data, m.ID[:]...)
+	data = append(data, m.id[:]...)
 	data = append(data, owner...)
 	data = append(data, key...)
 	return m.ls.Send(data, addr)
 }
 
+func (m *Manager) sendRegistered(addr net.Addr, key []byte) error {
+	var data = make([]byte, 0, 20+len(key))
+	data = append(data, cmdRegistered...)
+	data = append(data, m.id[:]...)
+	data = append(data, key...)
+	return m.ls.Send(data, addr)
+}
+
 func (m *Manager) sendReset(key []byte) error {
-	var data = make([]byte, 0, 1024)
+	var data = make([]byte, 0, 20+len(key))
 	data = append(data, cmdBroadReset...)
-	data = append(data, m.ID[:]...)
+	data = append(data, m.id[:]...)
 	data = append(data, key...)
 	return m.ls.SendAll(data)
 }
 
 func (m *Manager) sendCompareInstances(id []byte) error {
-	var data = make([]byte, 0, 1024)
+	var data = make([]byte, 0, 36)
 	data = append(data, cmdBroadCompare...)
-	data = append(data, m.ID[:]...)
+	data = append(data, m.id[:]...)
 	data = append(data, id...)
 	return m.ls.SendAll(data)
 }
 
 func (m *Manager) sendCompared(addr net.Addr, id []byte) error {
-	var data = make([]byte, 0, 1024)
+	var data = make([]byte, 0, 36)
 	data = append(data, cmdCompared...)
-	data = append(data, m.ID[:]...)
+	data = append(data, m.id[:]...)
 	data = append(data, id...)
 	return m.ls.Send(data, addr)
 }
@@ -86,10 +94,11 @@ var (
 	cmdBroadReset   = []byte("RSET")
 	cmdBroadCompare = []byte("CMPI")
 
-	cmdWelcome   = []byte("WLCM")
-	cmdCandidate = []byte("CAND")
-	cmdSaved     = []byte("SAVD")
-	cmdCompared  = []byte("CMPO")
+	cmdWelcome    = []byte("WLCM")
+	cmdCandidate  = []byte("CAND")
+	cmdRegistered = []byte("REGD")
+	cmdSaved      = []byte("SAVD")
+	cmdCompared   = []byte("CMPO")
 )
 
 type Msg struct {
