@@ -1,40 +1,42 @@
 package coordinator
 
 import (
+	"context"
 	"errors"
+	"math/rand"
 	"sync/atomic"
+	"time"
 )
 
 const Mine = "MINE"
 
-func (m *Manager) CheckKey(key string) (string, error) {
+func (m *Manager) CheckKey(ctx context.Context, key string) (string, error) {
 	if atomic.LoadInt64(&m.armed) != Armed {
 		return "", errors.New("not ready")
 	}
 	if len(key) > 128 {
 		return "", errors.New("too long key")
 	}
-	if instance := m.ins.search(key); instance != "" {
-		return instance, nil
-	}
-	if !m.ins.toOwn(key) {
-		m.ins.fromOwn(key)
-		return "", errors.New("can't own, race")
-	}
-	var trys = 5
 	for {
-		errCh := m.awaitResponses(cmdSaved, []byte(key))
-		if err := m.advertiseThatIsMine(key); err != nil {
-			m.ins.fromOwn(key)
+		if instance := m.ins.search(key); instance != "" {
+			return instance, nil
+		}
+		owned, err := m.tryToOwn(key)
+		if err != nil {
 			return "", err
 		}
-		if err := <-errCh; err != nil {
-			if trys--; trys > 0 {
-				continue
-			}
-			m.ins.fromOwn(key)
-			return "", err
+		if owned {
+			return Mine, nil
 		}
-		return Mine, nil
+		if instance := m.ins.search(key); instance != "" {
+			return instance, nil
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+
+		case <-time.After(time.Duration(rand.Intn(50)+50) * time.Millisecond):
+			// next trying
+		}
 	}
 }

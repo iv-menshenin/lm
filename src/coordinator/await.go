@@ -3,6 +3,7 @@ package coordinator
 import (
 	"bytes"
 	"errors"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -53,7 +54,9 @@ func (m *Manager) awaitResponses(cmd, data []byte) <-chan error {
 }
 
 func (m *Manager) awaitMostOf(cmd, data []byte) <-chan error {
-	var kvorum = int64(m.ins.getCount()/2) + 1
+	log.Printf("AWAITING %x: %s %x", m.ID, string(cmd), data)
+
+	var kvorum = int64(m.ins.getCount()+1) / 2
 	var wg sync.WaitGroup
 	var cancel = make(chan struct{})
 	var done = make(chan struct{})

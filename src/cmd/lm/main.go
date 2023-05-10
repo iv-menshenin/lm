@@ -33,7 +33,7 @@ func main() {
 				serv string
 				key  = request.URL.Query().Get("key")
 			)
-			serv, err = c.CheckKey(key)
+			serv, err = c.CheckKey(request.Context(), key)
 			if err != nil {
 				log.Printf("ERROR %s: %+v\n", c.Key(), err)
 				writer.WriteHeader(http.StatusInternalServerError)

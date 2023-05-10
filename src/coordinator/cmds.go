@@ -21,7 +21,15 @@ func (m *Manager) sendWelcome(addr net.Addr) error {
 	return m.ls.Send(data, addr)
 }
 
-func (m *Manager) advertiseThatIsMine(key string) error {
+func (m *Manager) sendWantKey(key string) error {
+	var data = make([]byte, 0, 1024)
+	data = append(data, cmdBroadWantKey...)
+	data = append(data, m.ID[:]...)
+	data = append(data, key...)
+	return m.ls.SendAll(data)
+}
+
+func (m *Manager) sendThatIsMine(key string) error {
 	var data = make([]byte, 0, 1024)
 	data = append(data, cmdBroadMine...)
 	data = append(data, m.ID[:]...)
@@ -29,10 +37,20 @@ func (m *Manager) advertiseThatIsMine(key string) error {
 	return m.ls.SendAll(data)
 }
 
-func (m *Manager) sendSaved(addr net.Addr, key []byte) error {
+func (m *Manager) sendCandidate(addr net.Addr, owner, key []byte) error {
+	var data = make([]byte, 0, 1024)
+	data = append(data, cmdCandidate...)
+	data = append(data, m.ID[:]...)
+	data = append(data, owner...)
+	data = append(data, key...)
+	return m.ls.Send(data, addr)
+}
+
+func (m *Manager) sendSaved(addr net.Addr, owner, key []byte) error {
 	var data = make([]byte, 0, 1024)
 	data = append(data, cmdSaved...)
 	data = append(data, m.ID[:]...)
+	data = append(data, owner...)
 	data = append(data, key...)
 	return m.ls.Send(data, addr)
 }
@@ -64,12 +82,14 @@ func (m *Manager) sendCompared(addr net.Addr, id []byte) error {
 var (
 	cmdBroadKnock   = []byte("KNCK")
 	cmdBroadMine    = []byte("MINE")
+	cmdBroadWantKey = []byte("WANT")
 	cmdBroadReset   = []byte("RSET")
 	cmdBroadCompare = []byte("CMPI")
 
-	cmdWelcome  = []byte("WLCM")
-	cmdSaved    = []byte("SAVD")
-	cmdCompared = []byte("CMPO")
+	cmdWelcome   = []byte("WLCM")
+	cmdCandidate = []byte("CAND")
+	cmdSaved     = []byte("SAVD")
+	cmdCompared  = []byte("CMPO")
 )
 
 type Msg struct {

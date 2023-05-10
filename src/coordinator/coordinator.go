@@ -29,6 +29,7 @@ type Manager struct {
 
 	ins *Instances
 	awr *Awaiter
+	own *Ownership
 }
 
 type Transport interface {
@@ -65,6 +66,7 @@ func New(transport Transport) *Manager {
 		done:  make(chan struct{}),
 		ins:   newInstances(),
 		awr:   newAwaiter(),
+		own:   newOwnership(),
 	}
 }
 
@@ -205,7 +207,16 @@ func (m *Manager) process(msg Msg) error {
 		if err = m.ins.save(msg.sender, string(msg.data), msg.addr); err != nil {
 			// err = m.sendReset(msg.data) not yours
 		} else {
-			err = m.sendSaved(msg.addr, msg.data)
+			log.Printf("OWNERSHIP APPROVED %x: %s", msg.sender, string(msg.data))
+			err = m.sendSaved(msg.addr, msg.sender, msg.data)
+		}
+	}
+	if bytes.Equal(msg.cmd, cmdBroadWantKey) {
+		var id [16]byte
+		copy(id[:], msg.sender)
+		if m.own.add(id, string(msg.data)) {
+			log.Printf("OWNERSHIP CANDIDATE %x: %s", id, string(msg.data))
+			err = m.sendCandidate(msg.addr, msg.sender, msg.data)
 		}
 	}
 	// someone wants to revoke possession of a key because of a conflict
