@@ -2,16 +2,18 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
 
-	"github.com/iv-menshenin/lm/coordinator"
-	"github.com/iv-menshenin/lm/transport"
+	"github.com/iv-menshenin/choreo/fleetctrl"
+	"github.com/iv-menshenin/choreo/transport"
 )
 
 func main() {
@@ -20,8 +22,8 @@ func main() {
 		panic(err)
 	}
 	defer udp.Close()
-	c := coordinator.New(udp)
-	c.SetLogLevel(coordinator.LogLevelDebug)
+	c := fleetctrl.New(udp)
+	c.SetLogLevel(fleetctrl.LogLevelDebug)
 	var (
 		keyStore = make(map[string]int64)
 		keyMux   sync.Mutex
@@ -40,38 +42,46 @@ func main() {
 				writer.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			if serv == coordinator.Mine {
-				writer.Header().Set("Keep-Alive", "True")
+			if serv == fleetctrl.Mine {
+				var current int64
+				writer.Header().Set("Keep-Alive", "300")
 				log.Printf("PROCESS: %s\n", c.Key())
 				switch request.URL.Path {
 				case "/keys/increment":
 					keyMux.Lock()
-					current := keyStore[key]
+					current = keyStore[key]
 					current++
 					keyStore[key] = current
 					keyMux.Unlock()
 					writer.WriteHeader(http.StatusOK)
-					writer.Write([]byte(fmt.Sprintf("CURRENT FOR [%s]: %d", key, current)))
+
 				case "/keys/decrement":
 					keyMux.Lock()
-					current := keyStore[key]
+					current = keyStore[key]
 					current--
 					keyStore[key] = current
 					keyMux.Unlock()
 					writer.WriteHeader(http.StatusOK)
-					writer.Write([]byte(fmt.Sprintf("CURRENT FOR [%s]: %d", key, current)))
+
 				case "/keys/value":
 					keyMux.Lock()
-					current := keyStore[key]
+					current = keyStore[key]
 					keyMux.Unlock()
 					writer.WriteHeader(http.StatusOK)
-					writer.Write([]byte(fmt.Sprintf("CURRENT FOR [%s]: %d", key, current)))
+
+				default:
+					writer.WriteHeader(http.StatusNotFound)
+					log.Printf("NOT FOUND: %s\n", request.URL.Path)
+					return
+				}
+				if _, err = writer.Write([]byte(fmt.Sprintf("CURRENT FOR [%s]: %d", key, current))); err != nil {
+					log.Printf("ERROR %s: %+v\n", c.Key(), err)
 				}
 				return
 			}
 			req := request.Clone(context.Background())
 			hostPort := strings.Split(serv, ":")
-			req.Header.Add("Keep-Alive", "True")
+			req.Header.Add("Keep-Alive", "300")
 			req.URL.Host = hostPort[0] + ":8080"
 			req.URL.Scheme = "http"
 			log.Printf("REDIRECT: %s\n", req.URL.String())
@@ -82,18 +92,30 @@ func main() {
 				return
 			}
 			defer resp.Body.Close()
+			writer.Header().Set("Keep-Alive", "300")
 			writer.WriteHeader(resp.StatusCode)
-			io.Copy(writer, resp.Body)
-			return
+			if _, err = io.Copy(writer, resp.Body); err != nil {
+				log.Printf("ERROR %s: %+v\n", c.Key(), err)
+			}
 		}),
 	}
 	go func() {
-		if err := server.ListenAndServe(); err != http.ErrServerClosed {
+		if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 			fmt.Printf("%+v\n", err)
 			os.Exit(1)
 		}
 	}()
-	if err := c.Manage(); err != nil {
+	go func() {
+		if err := c.Manage(); err != nil {
+			panic(err)
+		}
+	}()
+	var sig = make(chan os.Signal, 16)
+	signal.Notify(sig, os.Interrupt)
+	<-sig
+	log.Println("INTERRUPTED")
+	c.Stop()
+	if err = server.Close(); err != nil {
 		panic(err)
 	}
 }
