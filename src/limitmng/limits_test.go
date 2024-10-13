@@ -17,36 +17,34 @@ import (
 func Test_LimitPrimitives(t *testing.T) {
 	t.Parallel()
 	const (
-		rph = 3600000
-		wsz = 50 * time.Millisecond
+		wsz = 500 * time.Millisecond
+		tst = 10 * time.Second
+		cnt = 10000
 	)
+	rph := types.PerSecond(1000)
 	t.Run("leakybucket", func(t *testing.T) {
 		t.Parallel()
 		var lb = leakybucket.New(rph, wsz)
 		defer lb.Go()()
-		testLimit(t, lb, time.Second, 1000, 1)
+		testLimit(t, lb, tst, cnt, 2)
 	})
 	t.Run("tokenbucket", func(t *testing.T) {
 		t.Parallel()
 		var lb = tokenbucket.New(rph, wsz)
 		defer lb.Go()()
-		testLimit(t, lb, time.Second, 1000, 1)
+		testLimit(t, lb, tst, cnt, 2)
 	})
 	t.Run("fixedwindow", func(t *testing.T) {
 		t.Parallel()
-		// used a longer testing time because of a boundary issue
-		var thisTestTime = time.Second + 10*time.Millisecond
-		var lb = fixedwindow.New(types.PerTime(1000, thisTestTime), wsz)
+		var lb = fixedwindow.New(rph, wsz)
 		defer lb.Go()()
-		testLimit(t, lb, thisTestTime, 1000, 5.1)
+		testLimit(t, lb, tst, cnt, 2)
 	})
 	t.Run("slidingwindow", func(t *testing.T) {
 		t.Parallel()
-		// there is less of a boundary problem for a sliding window than for a fixed window, but it is also present
-		var thisTestTime = time.Second + 10*time.Millisecond
-		var lb = slidingwindow.New(types.PerTime(1000, time.Second), wsz, 5)
+		var lb = slidingwindow.New(rph, wsz, 5)
 		defer lb.Go()()
-		testLimit(t, lb, thisTestTime, 1000, 5.1)
+		testLimit(t, lb, tst, cnt, 2)
 	})
 }
 

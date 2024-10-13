@@ -64,7 +64,7 @@ func (b *SlidingWindow) GetLimit() (fit bool) {
 		counter += count
 	}
 	if fit = counter < b.threshold; fit {
-		b.counter[0] += 1
+		b.counter[0]++
 	}
 	b.last = time.Now()
 	b.mux.Unlock()

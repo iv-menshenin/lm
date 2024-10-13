@@ -90,6 +90,6 @@ func (b *LeakyBucket) GetLimit() bool {
 	if b.counter > b.threshold {
 		return false
 	}
-	b.counter += 1
+	b.counter++
 	return true
 }
